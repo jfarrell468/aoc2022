@@ -3,6 +3,7 @@ struct ParseError;
 
 fn main() {
     let mut part1_count = 0;
+    let mut part2_count = 0;
     for line in std::io::stdin().lines() {
         let line = line.unwrap();
         let mut tokens = line.split(&[',', '-']);
@@ -11,6 +12,10 @@ fn main() {
         if r1.contains(&r2.start) && r1.contains(&(r2.end - 1)) || r2.contains(&r1.start) && r2.contains(&(r1.end - 1)) {
             part1_count += 1;
         }
+        if r1.contains(&r2.start) || r1.contains(&(r2.end - 1)) || r2.contains(&r1.start) || r2.contains(&(r1.end - 1)) {
+            part2_count += 1;
+        }
     }
     println!("Part 1: {}", part1_count);
+    println!("Part 2: {}", part2_count);
 }
