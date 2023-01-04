@@ -5,6 +5,7 @@ enum Play {
     Scissors = 3,
 }
 
+#[derive(Clone, Copy)]
 enum Outcome {
     Loss = 0,
     Draw = 3,
@@ -47,15 +48,49 @@ impl Play {
     }
 }
 
+impl Outcome {
+    fn parse(c: char) -> Result<Outcome, ParseError> {
+        match c {
+            'X' => Ok(Outcome::Loss),
+            'Y' => Ok(Outcome::Draw),
+            'Z' => Ok(Outcome::Win),
+            _ => Err(ParseError),
+        }
+    }
+    fn my_play(self, their_play: Play) -> Play {
+        match self {
+            Outcome::Loss => match their_play {
+                Play::Rock => Play::Scissors,
+                Play::Paper => Play::Rock,
+                Play::Scissors => Play::Paper,
+            },
+            Outcome::Draw => their_play,
+            Outcome::Win => match their_play {
+                Play::Rock => Play::Paper,
+                Play::Paper => Play::Scissors,
+                Play::Scissors => Play::Rock,
+            },
+        }
+    }
+}
+
 fn main() {
-    let mut score: i32 = 0;
+    let mut part1_score: i32 = 0;
+    let mut part2_score: i32 = 0;
     for line in std::io::stdin().lines() {
         let line = line.unwrap();
         let mut chars = line.chars();
         let their_play = Play::parse(chars.next().unwrap()).unwrap();
         chars.next();
-        let my_play = Play::parse(chars.next().unwrap()).unwrap();
-        score += my_play.score_versus(their_play);
+        let third_char = chars.next().unwrap();
+
+        let my_play = Play::parse(third_char).unwrap();
+        part1_score += my_play.score_versus(their_play);
+
+        let desired_outcome = Outcome::parse(third_char).unwrap();
+        let my_play = desired_outcome.my_play(their_play);
+        part2_score += my_play as i32 + desired_outcome as i32;
     }
-    println!("Part 1: {}", score);
+    println!("Part 1: {}", part1_score);
+    println!("Part 2: {}", part2_score);
 }
