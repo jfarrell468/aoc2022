@@ -42,11 +42,28 @@ impl Rucksack {
 }
 
 fn main() {
-    let mut priority = 0;
+    let mut part1_priority = 0;
+    let mut part2_priority = 0;
+    let mut i = 0;
+    let mut last3: [HashSet<Item>; 3] = [HashSet::new(), HashSet::new(), HashSet::new()];
     for line in std::io::stdin().lines() {
         let rs = Rucksack::parse(line.unwrap().as_str());
         let mut intersect = rs.c1.intersection(&rs.c2);
-        priority += intersect.next().unwrap().priority();
+        part1_priority += intersect.next().unwrap().priority();
+
+        last3[i % 3] = HashSet::new();
+        last3[i % 3].extend(rs.c1);
+        last3[i % 3].extend(rs.c2);
+        i += 1;
+        if i % 3 == 0 {
+            for item in last3[0].intersection(&last3[1]) {
+                if last3[2].contains(item) {
+                    part2_priority += item.priority();
+                    break;
+                }
+            }
+        }
     }
-    println!("Part 1: {}", priority)
+    println!("Part 1: {}", part1_priority);
+    println!("Part 2: {}", part2_priority);
 }
