@@ -1,5 +1,6 @@
 fn main() {
-    let mut piles : Vec<Vec<char>> = Vec::new();
+    let mut piles: Vec<Vec<char>> = Vec::new();
+    let mut piles2: Vec<Vec<char>> = Vec::new();
     for line in std::io::stdin().lines() {
         let line = line.unwrap();
         if line.contains("[") {
@@ -21,19 +22,30 @@ fn main() {
             tokens.next();
             let to = tokens.next().unwrap().parse::<usize>().unwrap();
             // println!("move {} from {} to {}", count, from, to);
+            let mut tmp = Vec::new();
             for _ in 0..count {
-                let c = piles[from-1].pop().unwrap();
-                piles[to-1].push(c);
+                let c = piles[from - 1].pop().unwrap();
+                piles[to - 1].push(c);
+                tmp.push(piles2[from - 1].pop().unwrap());
             }
+            tmp.reverse();
+            piles2[to - 1].append(&mut tmp);
         } else if line.is_empty() {
             for pile in piles.iter_mut() {
                 pile.reverse();
                 // println!("{:?}", pile);
             }
+            piles2 = piles.clone();
         }
     }
+    print!("Part 1: ");
     for pile in piles.iter_mut() {
         print!("{}", pile.pop().unwrap());
     }
-    println!("")
+    println!("");
+    print!("Part 2: ");
+    for pile in piles2.iter_mut() {
+        print!("{}", pile.pop().unwrap());
+    }
+    println!("");
 }
