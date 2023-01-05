@@ -105,12 +105,18 @@ fn main() {
             }
         }
     }
-    let mut total_size = 0;
+    let mut total_size_under_100k = 0;
+    let mut free = 70000000 - filesystem.directories["/"].size(&filesystem);
+    let mut smallest_size = 0;
     for dir in filesystem.directories.values() {
         let size = dir.size(&filesystem);
         if size < 100000 {
-            total_size += size;
+            total_size_under_100k += size;
+        }
+        if free + size >= 30000000 && (smallest_size == 0 || size < smallest_size) {
+            smallest_size = size;
         }
     }
-    println!("Part 1: {}", total_size);
+    println!("Part 1: {}", total_size_under_100k);
+    println!("Part 2: {}", smallest_size);
 }
