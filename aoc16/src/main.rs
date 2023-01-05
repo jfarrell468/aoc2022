@@ -8,7 +8,7 @@ Try using a greedy algorithm?
 Memoize? But the benefit of visiting a node depends on when we get there.
 
 What if greedy approach doesn't work?
-15! paths is a lot. Can we prune? 
+15! paths is a lot. Can we prune?
 
 Transform the graph.
 Max flow is (sum of flows) * (length of simulation)
@@ -17,7 +17,7 @@ New graph:
     edges are paths through the original graph.
     vertex weights are MINUS the amount of flow we would get from making this choice.
     Then we can use Dijkstra's algorithm to find the shortest path.
-    2^15 is a manageable number of vertices. 
+    2^15 is a manageable number of vertices.
     but the number of edges might be a problem.
     and maybe we don't benefit from transforming the graph, since we might just as well keep track as we go.
 
@@ -26,7 +26,7 @@ a, d, b, j, h, e, c
 */
 
 use itertools::Itertools;
-use petgraph::algo::floyd_warshall; 
+use petgraph::algo::floyd_warshall;
 use petgraph::dot::Dot;
 use petgraph::graph::Graph;
 use std::collections::HashMap;
@@ -43,7 +43,6 @@ impl fmt::Display for FlowNode {
     }
 }
 
-
 // #[derive(Debug)]
 // struct Graph {
 //     vertices: HashMap<String, Vertex>
@@ -57,13 +56,30 @@ fn main() {
         let line = line.unwrap();
         let tokens: Vec<&str> = line.split_ascii_whitespace().collect();
         let vname = tokens[1].to_string();
-        let flow = tokens[4].strip_suffix(";").unwrap().strip_prefix("rate=").unwrap().parse::<i32>().unwrap();
-        let from = indices.entry(vname.clone()).or_insert_with(|| g.add_node(FlowNode{name: vname, flow})).clone();
+        let flow = tokens[4]
+            .strip_suffix(";")
+            .unwrap()
+            .strip_prefix("rate=")
+            .unwrap()
+            .parse::<i32>()
+            .unwrap();
+        let from = indices
+            .entry(vname.clone())
+            .or_insert_with(|| g.add_node(FlowNode { name: vname, flow }))
+            .clone();
         // g.update_edge(from, from, 0 as u32);
         // println!("{}, {:?}", vname, from);
         for token in tokens[9..].iter() {
             let token = token.strip_suffix(",").unwrap_or(token).to_string();
-            let to = indices.entry(token.clone()).or_insert_with(|| g.add_node(FlowNode{name: token, flow: 0})).clone();
+            let to = indices
+                .entry(token.clone())
+                .or_insert_with(|| {
+                    g.add_node(FlowNode {
+                        name: token,
+                        flow: 0,
+                    })
+                })
+                .clone();
             // petgraph's Floyd-Warshall implementation doesn't work with undirected graphs.
             g.update_edge(from, to, 1);
             g.update_edge(to, from, 1);
@@ -82,7 +98,7 @@ fn main() {
     let shortest_paths = floyd_warshall(&g, |e| 1).unwrap();
     // println!("{:?}", shortest_paths);
     // println!("{} indices, {} paths", indices.len(), shortest_paths.len());
-    g.retain_nodes(|g,n| g[n].flow > 0 || g[n].name == "AA" );
+    g.retain_nodes(|g, n| g[n].flow > 0 || g[n].name == "AA");
     // println!("{}", Dot::new(&g));
     let mut start = g.node_indices().next().unwrap();
     let mut all_indices = Vec::new();
@@ -94,7 +110,11 @@ fn main() {
         }
         for j in g.node_indices() {
             if i != j {
-                g.update_edge(i,j, shortest_paths[&(indices[&g[i].name], indices[&g[j].name])]);
+                g.update_edge(
+                    i,
+                    j,
+                    shortest_paths[&(indices[&g[i].name], indices[&g[j].name])],
+                );
             }
         }
     }
@@ -113,9 +133,9 @@ fn main() {
             time += g.edge_weight(edge).unwrap() + 1;
             // print!("(w={},t={},f={})", g.edge_weight(edge).unwrap(), time, g[*node].flow);
             if time >= max_time {
-                break
+                break;
             }
-            flow += g[*node].flow * (max_time-time);
+            flow += g[*node].flow * (max_time - time);
             prev_node = node.clone();
         }
         // println!(". flow: {}", flow);
