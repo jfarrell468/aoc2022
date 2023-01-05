@@ -34,7 +34,7 @@ impl Forest {
     fn is_visible_from(&mut self, r: usize, c: usize, d: Direction) -> bool {
         self.is_on_edge(r, c, d) || self.trees[r][c].height > self.max_height_in_dir(r, c, d)
     }
-    fn is_on_edge(&mut self, r: usize, c: usize, d: Direction) -> bool {
+    fn is_on_edge(&self, r: usize, c: usize, d: Direction) -> bool {
         match d {
             Direction::Top => r == 0,
             Direction::Bottom => r == self.trees.len() - 1,
@@ -58,13 +58,32 @@ impl Forest {
         }
         std::cmp::max(nh, self.max_height_in_dir(nr, nc, d))
     }
-    fn neighbor(&mut self, r: usize, c: usize, d: Direction) -> (usize, usize) {
+    fn neighbor(&self, r: usize, c: usize, d: Direction) -> (usize, usize) {
         match d {
             Direction::Top => (r - 1, c),
             Direction::Bottom => (r + 1, c),
             Direction::Left => (r, c - 1),
             Direction::Right => (r, c + 1),
         }
+    }
+    fn scenic_score(&self, r: usize, c: usize) -> i32 {
+        self.scenic_score_in_direction(r, c, Direction::Top)
+            * self.scenic_score_in_direction(r, c, Direction::Bottom)
+            * self.scenic_score_in_direction(r, c, Direction::Left)
+            * self.scenic_score_in_direction(r, c, Direction::Right)
+    }
+    fn scenic_score_in_direction(&self, r: usize, c: usize, d: Direction) -> i32 {
+        let mut r1 = r;
+        let mut c1 = c;
+        let mut score = 0;
+        while !self.is_on_edge(r1, c1, d) {
+            score += 1;
+            (r1, c1) = self.neighbor(r1, c1, d);
+            if self.trees[r1][c1].height >= self.trees[r][c].height {
+                break;
+            }
+        }
+        score
     }
 }
 
@@ -77,12 +96,15 @@ fn main() {
             .push(line.chars().map(|c| Tree::new(c)).collect());
     }
     let mut num_visible = 0;
+    let mut max_scenic_score = 0;
     for r in 0..forest.trees.len() {
         for c in 0..forest.trees[r].len() {
             if forest.is_visible(r, c) {
                 num_visible += 1;
             }
+            max_scenic_score = std::cmp::max(max_scenic_score, forest.scenic_score(r, c));
         }
     }
     println!("Part 1: {}", num_visible);
+    println!("Part 2: {}", max_scenic_score);
 }
