@@ -1,35 +1,8 @@
-/*
-
-Parse the input.
-Remove all nodes with 0 flow rate, leaving ~15. But maybe don't need to do this.
-Find the cost to travel between any 2 nodes.
-
-Try using a greedy algorithm?
-Memoize? But the benefit of visiting a node depends on when we get there.
-
-What if greedy approach doesn't work?
-15! paths is a lot. Can we prune?
-
-Transform the graph.
-Max flow is (sum of flows) * (length of simulation)
-New graph:
-    directed, acyclic.
-    edges are paths through the original graph.
-    vertex weights are MINUS the amount of flow we would get from making this choice.
-    Then we can use Dijkstra's algorithm to find the shortest path.
-    2^15 is a manageable number of vertices.
-    but the number of edges might be a problem.
-    and maybe we don't benefit from transforming the graph, since we might just as well keep track as we go.
-
-a, d, b, j, h, e, c
-
-*/
-
-use itertools::Itertools;
 use petgraph::algo::floyd_warshall;
 use petgraph::dot::Dot;
 use petgraph::graph::Graph;
-use std::collections::HashMap;
+use petgraph::stable_graph::NodeIndex;
+use std::collections::{BTreeSet, BinaryHeap, HashMap, HashSet};
 use std::fmt;
 
 #[derive(Debug)]
@@ -43,13 +16,49 @@ impl fmt::Display for FlowNode {
     }
 }
 
-// #[derive(Debug)]
-// struct Graph {
-//     vertices: HashMap<String, Vertex>
-// }
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+struct PathPrefix {
+    min_flow: i32,
+    max_flow: i32,
+    time_remaining: i32,
+    path: Vec<NodeIndex>,
+    unvisited: BTreeSet<NodeIndex>,
+}
+impl PathPrefix {
+    fn new(g: &Graph<FlowNode, i32>, start: NodeIndex, time_remaining: i32) -> PathPrefix {
+        let mut p = PathPrefix {
+            min_flow: 0,
+            max_flow: 0,
+            time_remaining: time_remaining,
+            path: vec![start],
+            unvisited: BTreeSet::new(),
+        };
+        for i in g.node_indices() {
+            if i != start {
+                p.unvisited.insert(i);
+                p.max_flow += g[i].flow * time_remaining;
+            }
+        }
+        p
+    }
+    fn admissible(&self, best_min_flow: i32) -> bool {
+        self.time_remaining >= 0 && self.max_flow >= best_min_flow
+    }
+    fn append(&self, g: &Graph<FlowNode, i32>, next: NodeIndex) -> PathPrefix {
+        let mut p = self.clone();
+        p.unvisited.remove(&next);
+        let edge = g.find_edge(*p.path.last().unwrap(), next).unwrap();
+        p.path.push(next);
+        let flow = g[next].flow;
+        let time_cost = g.edge_weight(edge).unwrap() + 1;
+        p.max_flow -= flow * p.time_remaining;
+        p.time_remaining -= time_cost;
+        p.min_flow += flow * p.time_remaining;
+        p
+    }
+}
 
 fn main() {
-    // let mut g = Graph { vertices: HashMap::new() };
     let mut g = Graph::new();
     let mut indices = HashMap::new();
     for line in std::io::stdin().lines() {
@@ -67,8 +76,6 @@ fn main() {
             .entry(vname.clone())
             .or_insert_with(|| g.add_node(FlowNode { name: vname, flow }))
             .clone();
-        // g.update_edge(from, from, 0 as u32);
-        // println!("{}, {:?}", vname, from);
         for token in tokens[9..].iter() {
             let token = token.strip_suffix(",").unwrap_or(token).to_string();
             let to = indices
@@ -87,26 +94,19 @@ fn main() {
         g[from].flow = flow;
         g.node_weight_mut(from).unwrap().flow = flow;
     }
-    // for from in indices.values() {
-    //     for to in indices.values() {
-    //         if !g.contains_edge(from.clone(), to.clone()) {
-    //             g.update_edge(from.clone(), to.clone(), std::u32::MAX);
-    //         }
-    //     }
-    // }
     // println!("{}", Dot::new(&g));
-    let shortest_paths = floyd_warshall(&g, |e| 1).unwrap();
+    let shortest_paths = floyd_warshall(&g, |_| 1).unwrap();
     // println!("{:?}", shortest_paths);
     // println!("{} indices, {} paths", indices.len(), shortest_paths.len());
     g.retain_nodes(|g, n| g[n].flow > 0 || g[n].name == "AA");
     // println!("{}", Dot::new(&g));
     let mut start = g.node_indices().next().unwrap();
-    let mut all_indices = Vec::new();
+    let mut all_indices = HashSet::new();
     for i in g.node_indices() {
         if g[i].name == "AA" {
             start = i;
         } else {
-            all_indices.push(i);
+            all_indices.insert(i);
         }
         for j in g.node_indices() {
             if i != j {
@@ -120,28 +120,23 @@ fn main() {
     }
     // println!("{:?}", g);
     // println!("{}", Dot::new(&g));
-    let max_time = 30;
-    let mut max_flow = 0;
-    for path in all_indices.iter().permutations(7) {
-        let mut flow = 0;
-        let mut time = 0;
-        let mut prev_node = start;
-        // print!("path: AA");
-        for node in path {
-            // print!(", {}", g[*node].name);
-            let edge = g.find_edge(prev_node, *node).unwrap();
-            time += g.edge_weight(edge).unwrap() + 1;
-            // print!("(w={},t={},f={})", g.edge_weight(edge).unwrap(), time, g[*node].flow);
-            if time >= max_time {
-                break;
+
+    let mut best_flow = 0;
+    let mut heap = BinaryHeap::new();
+    heap.push(PathPrefix::new(&g, start, 30));
+    let best_min_flow = heap.peek().unwrap().min_flow;
+    while !heap.is_empty() {
+        let p = heap.pop().unwrap();
+        for node in &p.unvisited {
+            let next = p.append(&g, node.clone());
+            if next.admissible(best_min_flow) {
+                if next.min_flow > best_flow {
+                    best_flow = next.min_flow;
+                    // println!("{:?}", next);
+                }
+                heap.push(next);
             }
-            flow += g[*node].flow * (max_time - time);
-            prev_node = node.clone();
-        }
-        // println!(". flow: {}", flow);
-        if flow > max_flow {
-            max_flow = flow;
         }
     }
-    println!("Part 1: {}", max_flow);
+    println!("Part 1: {}", best_flow);
 }
