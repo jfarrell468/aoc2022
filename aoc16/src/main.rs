@@ -21,7 +21,9 @@ struct PathPrefix {
     min_flow: i32,
     max_flow: i32,
     time_remaining: i32,
+    time_remaining_elephant: i32,
     path: Vec<NodeIndex>,
+    path_elephant: Vec<NodeIndex>,
     unvisited: BTreeSet<NodeIndex>,
 }
 impl PathPrefix {
@@ -30,7 +32,9 @@ impl PathPrefix {
             min_flow: 0,
             max_flow: 0,
             time_remaining: time_remaining,
+            time_remaining_elephant: time_remaining,
             path: vec![start],
+            path_elephant: vec![start],
             unvisited: BTreeSet::new(),
         };
         for i in g.node_indices() {
@@ -42,7 +46,9 @@ impl PathPrefix {
         p
     }
     fn admissible(&self, best_min_flow: i32) -> bool {
-        self.time_remaining >= 0 && self.max_flow >= best_min_flow
+        self.time_remaining >= 0
+            && self.time_remaining_elephant >= 0
+            && self.max_flow >= best_min_flow
     }
     fn append(&self, g: &Graph<FlowNode, i32>, next: NodeIndex) -> PathPrefix {
         let mut p = self.clone();
@@ -51,9 +57,37 @@ impl PathPrefix {
         p.path.push(next);
         let flow = g[next].flow;
         let time_cost = g.edge_weight(edge).unwrap() + 1;
-        p.max_flow -= flow * p.time_remaining;
         p.time_remaining -= time_cost;
         p.min_flow += flow * p.time_remaining;
+        p.max_flow = p.min_flow;
+        for i in &p.unvisited {
+            let time_cost = g.edge_weight(g.find_edge(next, *i).unwrap()).unwrap() + 1;
+            p.max_flow += g[*i].flow
+                * std::cmp::max(
+                    std::cmp::max(p.time_remaining, p.time_remaining_elephant) - time_cost,
+                    0,
+                );
+        }
+        p
+    }
+    fn append_elephant(&self, g: &Graph<FlowNode, i32>, next: NodeIndex) -> PathPrefix {
+        let mut p = self.clone();
+        p.unvisited.remove(&next);
+        let edge = g.find_edge(*p.path_elephant.last().unwrap(), next).unwrap();
+        p.path_elephant.push(next);
+        let flow = g[next].flow;
+        let time_cost = g.edge_weight(edge).unwrap() + 1;
+        p.time_remaining_elephant -= time_cost;
+        p.min_flow += flow * p.time_remaining_elephant;
+        p.max_flow = p.min_flow;
+        for i in &p.unvisited {
+            let time_cost = g.edge_weight(g.find_edge(next, *i).unwrap()).unwrap() + 1;
+            p.max_flow += g[*i].flow
+                * std::cmp::max(
+                    std::cmp::max(p.time_remaining, p.time_remaining_elephant) - time_cost,
+                    0,
+                );
+        }
         p
     }
 }
@@ -121,22 +155,52 @@ fn main() {
     // println!("{:?}", g);
     // println!("{}", Dot::new(&g));
 
-    let mut best_flow = 0;
     let mut heap = BinaryHeap::new();
     heap.push(PathPrefix::new(&g, start, 30));
-    let best_min_flow = heap.peek().unwrap().min_flow;
+    let mut best_flow = heap.peek().unwrap().min_flow;
     while !heap.is_empty() {
         let p = heap.pop().unwrap();
         for node in &p.unvisited {
             let next = p.append(&g, node.clone());
-            if next.admissible(best_min_flow) {
+            if next.admissible(best_flow) {
                 if next.min_flow > best_flow {
                     best_flow = next.min_flow;
-                    // println!("{:?}", next);
+                    println!("best = {}, {:?}", best_flow, next);
                 }
                 heap.push(next);
             }
         }
     }
     println!("Part 1: {}", best_flow);
+
+    heap.clear();
+    heap.push(PathPrefix::new(&g, start, 26));
+    best_flow = heap.peek().unwrap().min_flow;
+    let mut iter = 0;
+    while !heap.is_empty() {
+        let p = heap.pop().unwrap();
+        for node in &p.unvisited {
+            let next = p.append(&g, node.clone());
+            if next.admissible(best_flow) {
+                if next.min_flow > best_flow {
+                    best_flow = next.min_flow;
+                    println!("best = {}, {:?}", best_flow, next);
+                }
+                heap.push(next);
+            }
+            let next = p.append_elephant(&g, node.clone());
+            if next.admissible(best_flow) {
+                if next.min_flow > best_flow {
+                    best_flow = next.min_flow;
+                    println!("best = {}, {:?}", best_flow, next);
+                }
+                heap.push(next);
+            }
+        }
+        iter += 1;
+        if iter % 1000000 == 0 {
+            println!("{} iterations, {} items in heap", iter, heap.len());
+        }
+    }
+    println!("Part 2: {}", best_flow);
 }
