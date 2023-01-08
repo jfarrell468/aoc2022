@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque},
-    fmt,
-};
+use std::fmt;
 
 #[derive(Debug, Clone)]
 struct Blueprint {
@@ -22,18 +19,64 @@ impl Blueprint {
             _ => panic!(),
         }
     }
+    fn find_best(&self, max_t: i32) -> i32 {
+        println!("{:?}", self);
+
+        let bc = BestCase::from(&self, max_t);
+        // bc.print();
+        if bc.data.last().unwrap().resources[GEODE] == 0 {
+            println!("No geodes possible");
+            return 0;
+        }
+        // break;
+
+        let mut start = State::new(max_t);
+        start.geode_lower_limit = start.predict_resource(GEODE);
+        start.geode_upper_limit = start.geode_upper_bound(&bc);
+        let mut ss = Vec::from([start]);
+        let mut most_geodes = 0;
+        let mut iter: i64 = 0;
+        State::print_header();
+        while !ss.is_empty() {
+            let s = ss.pop().unwrap();
+            // println!("{}", s);
+            let gll = s.geode_lower_limit;
+            let gul = s.geode_upper_limit;
+            if gll > most_geodes {
+                most_geodes = gll;
+                println!("{}", s);
+            }
+            if gul >= most_geodes && gul > 0 {
+                for s in s.next_states(&self, &bc) {
+                    // println!("next state");
+                    // if s.geode_upper_limit <= 0 { println!("{}", s); }
+                    if s.geode_upper_limit >= most_geodes && s.geode_upper_limit > 0 {
+                        ss.push(s);
+                    }
+                }
+            }
+            iter += 1;
+            if iter % 100000000 == 0 {
+                println!("{} iterations, {} items in stack", iter, ss.len());
+            }
+            // if iter > 100 {
+            //     break;
+            // }
+        }
+        most_geodes
+    }
 }
 
 const GEODE: usize = 0;
 const OBSIDIAN: usize = 1;
 const CLAY: usize = 2;
 const ORE: usize = 3;
-const ALL_TYPES: [usize; 4] = [GEODE, OBSIDIAN, CLAY, ORE];
+const ALL_TYPES: [usize; 4] = [ORE, CLAY, OBSIDIAN, GEODE];
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct State {
-    geode_lower_limit: i32,
     geode_upper_limit: i32,
+    geode_lower_limit: i32,
     robots: [i32; 4],
     resources: [i32; 4],
     time: i32,
@@ -91,8 +134,16 @@ impl State {
     fn can_build(&self, t: usize, b: &Blueprint) -> bool {
         self.can_build_n(t, b, 1)
     }
-    fn next_states(&self, b: &Blueprint, bc: &BestCase) -> VecDeque<State> {
-        let mut states = VecDeque::new();
+    fn can_build_anything(&self, b: &Blueprint) -> bool {
+        for t in ALL_TYPES {
+            if self.can_build(t, b) {
+                return true;
+            }
+        }
+        false
+    }
+    fn next_states(&self, b: &Blueprint, bc: &BestCase) -> Vec<State> {
+        let mut states = Vec::new();
         if self.tr > 1 {
             // This is wrong for part 2 of the simple example. So apparently there are cases where
             // you should WAIT to build a critical-path robot.
@@ -104,17 +155,17 @@ impl State {
             //     }
             // }
             if states.is_empty() {
+                states.push(self.do_nothing());
                 for t in ALL_TYPES {
                     if self.can_build(t, b) {
                         // println!("Can build {:?}", t);
-                        states.push_back(self.build_robot(t, b));
+                        states.push(self.build_robot(t, b));
                     }
                 }
-                states.push_back(self.do_nothing());
             }
         }
         if states.is_empty() && self.tr > 0 {
-            states.push_back(self.do_nothing());
+            states.push(self.do_nothing());
         }
         for s in &mut states {
             s.geode_lower_limit = s.predict_resource(GEODE);
@@ -226,6 +277,12 @@ impl BestCase {
                 .resources[GEODE];
             }
         }
+        for time in self.data.len() - 1..=0 {
+            if s.robots[GEODE] == self.data[time].robots[GEODE] {
+                return self.data[std::cmp::min(self.data.len() - 1, time + s.tr as usize)].robots
+                    [GEODE];
+            }
+        }
         self.data.last().unwrap().resources[GEODE]
     }
     fn print(&self) {
@@ -235,22 +292,6 @@ impl BestCase {
         }
         println!("{:?}", self.first_robot);
     }
-}
-
-fn resource_lower_bound(starting_resource: i32, starting_robots: i32, time_remaining: i32) -> i32 {
-    starting_resource + starting_robots * time_remaining
-}
-
-fn ore_upper_bound(
-    time_remaining: i32,
-    starting_robots: i32,
-    starting_ore: i32,
-    robot_cost: i32,
-) -> i32 {
-    let most_robots = std::cmp::max(time_remaining - robot_cost, 0);
-    resource_lower_bound(starting_ore, starting_robots, time_remaining)
-        + most_robots * (2 * (time_remaining - 1) - most_robots + 1) / 2
-        - most_robots * robot_cost
 }
 
 fn main() {
@@ -269,76 +310,19 @@ fn main() {
         });
     }
 
-    let max_t = 24;
-
-    // let mut s = State::new();
-    // State::print_header();
-    // println!("{}", s);
-    // for t in 1..=max_t {
-    //     s = match t {
-    //         3 | 5 | 7 | 12 => {
-    //             assert!(s.can_build(CLAY, &bs[0]));
-    //             s.build_robot(CLAY, &bs[0])
-    //         },
-    //         11 | 15 => {
-    //             assert!(s.can_build(OBSIDIAN, &bs[0]));
-    //             s.build_robot(OBSIDIAN, &bs[0])
-    //         },
-    //         18 | 21 => {
-    //             assert!(s.can_build(GEODE, &bs[0]));
-    //             s.build_robot(GEODE, &bs[0])
-    //         },
-    //         _ => s.do_nothing()
-
-    //     };
-    //     println!("{} predicted geodes: {}", s, s.predict_resource(GEODE, max_t));
-    // }
-    // return;
-
     let mut quality = 0;
     for b in &bs {
-        println!("{:?}", b);
-
-        let bc = BestCase::from(b, max_t);
-        bc.print();
-        if bc.data.last().unwrap().resources[GEODE] == 0 {
-            println!("No geodes possible");
-            continue;
-        }
-        // break;
-
-        let mut ss = Vec::from([State::new(max_t)]);
-        let mut most_geodes = 0;
-        let mut iter: i64 = 0;
-        State::print_header();
-        while !ss.is_empty() {
-            let s = ss.pop().unwrap();
-            // println!("{}", s);
-            let gll = s.geode_lower_limit;
-            let gul = s.geode_upper_limit;
-            if gll > most_geodes {
-                most_geodes = gll;
-                println!("{}", s);
-            }
-            if gul >= most_geodes {
-                for s in s.next_states(b, &bc) {
-                    // println!("next state");
-                    // if s.geode_upper_limit <= 0 { println!("{}", s); }
-                    if s.geode_upper_limit >= most_geodes && s.geode_upper_limit > 0 {
-                        ss.push(s);
-                    }
-                }
-            }
-            iter += 1;
-            if iter % 10000000 == 0 {
-                println!("{} iterations, {} items in stack", iter, ss.len());
-            }
-            // if iter > 100 {
-            //     break;
-            // }
-        }
+        let most_geodes = b.find_best(24);
         println!("Blueprint {}, Geodes {}", b.id, most_geodes);
         quality += b.id * most_geodes;
     }
     println!("Part 1: {}", quality);
+
+    let mut prod = 1;
+    for i in 0..3 {
+        let most_geodes = bs[i].find_best(32);
+        println!("Blueprint {}, Geodes {}", bs[i].id, most_geodes);
+        prod *= most_geodes;
+    }
+    println!("Part 2: {}", prod);
 }
