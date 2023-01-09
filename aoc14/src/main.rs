@@ -11,6 +11,7 @@ enum DropOutcome {
     Position((usize, usize)),
 }
 
+#[derive(Clone)]
 struct Cave {
     c: Vec<Vec<Contents>>,
     xmin: usize,
@@ -47,6 +48,8 @@ impl Cave {
             }
             rocks.push(cur_scan);
         }
+        xmin -= ymax + 1;
+        xmax += ymax + 1;
         // println!("{:?}", rocks);
         // println!("xmin = {}, xmax = {}, ymax = {}", xmin, xmax, ymax);
         let mut cave = Cave {
@@ -129,13 +132,29 @@ impl Cave {
 }
 
 fn main() {
-    let mut c = Cave::read_from_stdin();
+    let c = Cave::read_from_stdin();
     // c.print();
+    let mut c1 = c.clone();
     let mut t = 0;
-    while let DropOutcome::Position(_) = c.drop((500, 0)) {
+    while let DropOutcome::Position(_) = c1.drop((500, 0)) {
         // c.print();
         t += 1;
     }
-    c.print();
-    println!("Part 1: {}", t)
+    c1.print();
+    println!("Part 1: {}", t);
+
+    let mut c2 = c.clone();
+    c2.c.push(vec![Contents::Empty; c2.c[0].len()]);
+    c2.c.push(vec![Contents::Rock; c2.c[0].len()]);
+    c2.ymax += 2;
+    let mut t = 0;
+    while let DropOutcome::Position(pos) = c2.drop((500, 0)) {
+        // c.print();
+        t += 1;
+        if pos.0 == 500 && pos.1 == 0 {
+            break;
+        }
+    }
+    c2.print();
+    println!("Part 2: {}", t)
 }
